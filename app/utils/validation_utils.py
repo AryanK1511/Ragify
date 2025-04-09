@@ -1,6 +1,6 @@
-import re
+# app/utils/validation_utils.py
 
-import requests
+import re
 
 
 class ValidationUtils:
@@ -13,11 +13,4 @@ class ValidationUtils:
         if not url_regex.match(url):
             return False
 
-        if not url.startswith("http"):
-            url = "http://" + url
-
-        try:
-            response = requests.head(url, timeout=timeout, allow_redirects=True)
-            return response.status_code < 400
-        except requests.RequestException:
-            return False
+        return True

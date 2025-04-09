@@ -3,7 +3,6 @@
 import random
 import time
 
-from database.mongodb import MongoDB  # noqa
 from external.streamlit import st
 
 
