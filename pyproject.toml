@@ -1,0 +1,12 @@
+[project]
+name = "ragify"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "pydantic-settings>=2.8.1",
+    "pymongo>=4.12.0",
+    "requests>=2.32.3",
+    "streamlit>=1.44.1",
+]
