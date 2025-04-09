@@ -5,6 +5,7 @@ from typing import List
 from config import settings
 from database.qdrant import QdrantDatabase
 from pymongo import MongoClient
+from utils.logger import CustomLogger
 
 
 class MongoDB:
@@ -19,7 +20,7 @@ class MongoDB:
             doc = self.links_collection.find_one({}, {"_id": 0})
             return doc.get("all_links", []) if doc else []
         except Exception as e:
-            print(f"Error getting links: {e}")
+            CustomLogger.create_log("error", f"Error getting links: {e}")
             return []
 
     def add_links(self, new_links: List[str]) -> None:
@@ -30,8 +31,8 @@ class MongoDB:
             removed_links = [link for link in current_links if link not in new_links]
             added_links = [link for link in new_links if link not in current_links]
 
-            print("Removed links:", removed_links)
-            print("Added links:", added_links)
+            CustomLogger.create_log("info", f"Removed links: {removed_links}")
+            CustomLogger.create_log("info", f"Added links: {added_links}")
 
             self.qdrant_db.add_webpage_docs(added_links, removed_links)
 
@@ -42,4 +43,4 @@ class MongoDB:
             )
 
         except Exception as e:
-            print(f"Error adding links: {e}")
+            CustomLogger.create_log("error", f"Error adding links: {e}")

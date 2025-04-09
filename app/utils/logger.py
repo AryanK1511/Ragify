@@ -1,31 +1,39 @@
 # app/utils/logger.py
 
-import inspect
 import logging
 
+import coloredlogs
 from config import settings
 
-logger = logging.getLogger("uvicorn")
-logger.setLevel(settings.LOG_LEVEL)
+logger = logging.getLogger(__name__)
+
+field_styles = {
+    "levelname": {"color": "cyan", "bold": True},
+    "filename": {"color": "magenta"},
+    "message": {"color": "white"},
+}
+
+
+log_format = "%(levelname)s | (%(filename)s): %(message)s"
+
+coloredlogs.install(
+    level=settings.LOG_LEVEL,
+    logger=logger,
+    fmt=log_format,
+    field_styles=field_styles,
+)
 
 
 class CustomLogger:
     @staticmethod
     def create_log(log_type: str, message: str):
-        frame = inspect.currentframe().f_back
-        filename = frame.f_globals["__file__"]
-        app_index = filename.find("app/")
-        if app_index != -1:
-            filename = "/" + filename[app_index:]
-        log_message = f"{filename}: {message}"
-
         if log_type == "debug":
-            logger.debug(log_message)
+            logger.debug(message)
         elif log_type == "warning":
-            logger.warning(log_message)
+            logger.warning(message)
         elif log_type == "error":
-            logger.error(log_message)
+            logger.error(message)
         elif log_type == "critical":
-            logger.critical(log_message)
+            logger.critical(message)
         else:
-            logger.info(log_message)
+            logger.info(message)

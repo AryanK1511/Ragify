@@ -90,13 +90,10 @@ class QdrantDatabase:
                     "info", f"Removing embeddings for {len(removed_links)} links"
                 )
                 for url in removed_links:
-                    print(f"\nProcessing URL: {url}")
                     all_point_ids = []
                     offset = None
 
-                    # Use pagination to get all points for this URL
                     while True:
-                        # Get points for this URL with pagination
                         scroll_results = self.client.scroll(
                             collection_name=settings.QDRANT_COLLECTION_NAME,
                             scroll_filter=Filter(
@@ -107,44 +104,37 @@ class QdrantDatabase:
                                     )
                                 ]
                             ),
-                            limit=100,  # Increased limit
+                            limit=100,
                             offset=offset,
                         )
 
                         points = scroll_results[0]
                         next_offset = scroll_results[1]
 
-                        print(f"Found {len(points)} points in this batch")
-
-                        # Extract point IDs from the scroll results
                         for point in points:
-                            print(f"Point ID: {point.id}")
                             if isinstance(point.id, str):
                                 all_point_ids.append(point.id)
                             elif isinstance(point.id, int):
                                 all_point_ids.append(str(point.id))
 
-                        # Break if no more points
                         if not next_offset:
                             break
 
                         offset = next_offset
 
-                    print(f"Total points to delete for URL {url}: {len(all_point_ids)}")
-
                     if all_point_ids:
-                        print(f"Deleting points with IDs: {all_point_ids}")
-                        # Delete in batches to avoid potential issues with large lists
                         batch_size = 100
                         for i in range(0, len(all_point_ids), batch_size):
                             batch = all_point_ids[i : i + batch_size]
-                            print(
-                                f"Deleting batch {i//batch_size + 1} with {len(batch)} points"
+                            CustomLogger.create_log(
+                                "info",
+                                f"Deleting batch {i//batch_size + 1} with {len(batch)} points",
                             )
                             self.client.delete(
                                 collection_name=settings.QDRANT_COLLECTION_NAME,
                                 points_selector=PointIdsList(points=batch),
                             )
+
                 CustomLogger.create_log(
                     "info", "Successfully removed embeddings for removed links"
                 )
