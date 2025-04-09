@@ -1,4 +1,5 @@
-# app/extrernal/streamlit.py
+# app/external/streamlit.py
+
 
 import streamlit as st
 

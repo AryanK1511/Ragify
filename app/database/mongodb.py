@@ -1,6 +1,9 @@
+# app/database/mongodb.py
+
 from typing import List
 
 from config import settings
+from database.qdrant import QdrantDatabase
 from pymongo import MongoClient
 
 
@@ -9,6 +12,7 @@ class MongoDB:
         self.client = MongoClient(settings.MONGODB_URI)
         self.db = self.client.ragify_database
         self.links_collection = self.db.links
+        self.qdrant_db = QdrantDatabase()
 
     def get_all_links(self) -> List[str]:
         try:
@@ -28,6 +32,8 @@ class MongoDB:
 
             print("Removed links:", removed_links)
             print("Added links:", added_links)
+
+            self.qdrant_db.add_webpage_docs(added_links, removed_links)
 
             self.links_collection.replace_one(
                 {},

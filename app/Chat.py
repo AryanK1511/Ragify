@@ -4,6 +4,7 @@ import random
 import time
 
 from database.mongodb import MongoDB  # noqa
+from database.qdrant import QdrantDatabase  # noqa
 from external.streamlit import st
 
 
