@@ -3,11 +3,7 @@
 import random
 import time
 
-from agent import Agent
 from external.streamlit import st
-
-agent = Agent()
-st.markdown(agent.query("Hello! How are you?"))
 
 
 def response_generator():
