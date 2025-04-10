@@ -1,5 +1,7 @@
 # app/database/mongodb.py
 
+# app/database/mongodb.py
+
 from typing import List
 
 from config import settings
@@ -13,6 +15,7 @@ class MongoDB:
         self.client = MongoClient(settings.MONGODB_URI)
         self.db = self.client.ragify_database
         self.links_collection = self.db.links
+        self.qdrant_db = QdrantDatabase()
         self.qdrant_db = QdrantDatabase()
 
     def get_all_links(self) -> List[str]:
