@@ -5,7 +5,7 @@ from services.ai_service import AIService
 
 ai_service = AIService()
 
-st.title("Simple chat")
+st.title("💬 Ragify Chat")
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
