@@ -1,56 +1,75 @@
 # app/utils/database_utils.py
 
-from langchain.schema import Document
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_community.document_loaders import WebBaseLoader
-from utils.logger import CustomLogger
+import tempfile
+from typing import Any, List, Optional
+
+from database.s3 import S3Storage
+from langchain_community.document_loaders import (
+    PyPDFLoader,
+    TextLoader,
+    WebBaseLoader,
+)
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from utils.logger import logger
+
+s3 = S3Storage()
 
 
 class DatabaseUtils:
     @staticmethod
-    def get_text_from_webpages(urls):
+    def get_webpage_text(url: str) -> Optional[List[Any]]:
         try:
-            CustomLogger.create_log(
-                "info", f"Fetching content from {len(urls)} webpages"
-            )
-            loader = WebBaseLoader(urls)
+            logger.info(f"Fetching content from webpage: {url}")
+            loader = WebBaseLoader([url])
             docs = loader.load()
-            CustomLogger.create_log(
-                "info", f"Successfully fetched content from {len(docs)} webpages"
-            )
-            return docs
+            if docs and len(docs) > 0:
+                for doc in docs:
+                    doc.metadata["source_url"] = url
+                logger.info(f"Successfully fetched content from webpage: {url}")
+                return docs
+            return None
         except Exception as e:
-            CustomLogger.create_log(
-                "error", f"Error fetching webpage content: {str(e)}"
-            )
-            raise Exception(f"Failed to fetch webpage content: {str(e)}")
+            logger.error(f"Error fetching webpage content: {str(e)}")
+            return None
 
     @staticmethod
-    def chunk_documents(docs, chunk_size=1000, chunk_overlap=200):
+    def get_document_text(s3_filename: str) -> Optional[List[Any]]:
         try:
-            CustomLogger.create_log("info", f"Chunking {len(docs)} documents")
+            file_content, content_type = s3.download_file(s3_filename)
 
-            text_splitter = RecursiveCharacterTextSplitter(
-                chunk_size=chunk_size,
-                chunk_overlap=chunk_overlap,
-                length_function=len,
-            )
+            if content_type == "application/pdf":
+                with tempfile.NamedTemporaryFile(
+                    delete=False, suffix=".pdf"
+                ) as tmp_file:
+                    tmp_file.write(file_content)
+                    tmp_path = tmp_file.name
+                loader = PyPDFLoader(tmp_path)
 
-            chunked_docs = []
+            elif content_type == "text/plain":
+                with tempfile.NamedTemporaryFile(
+                    delete=False, suffix=".txt"
+                ) as tmp_file:
+                    tmp_file.write(file_content)
+                    tmp_path = tmp_file.name
+                loader = TextLoader(tmp_path)
+
+            else:
+                raise ValueError(f"Unsupported file type: {content_type}")
+
+            docs = loader.load()
+
             for doc in docs:
-                url = doc.metadata.get("source", "")
+                doc.metadata["source_filename"] = s3_filename
 
-                chunks = text_splitter.split_text(doc.page_content)
+            return docs if docs else None
 
-                for chunk in chunks:
-                    chunked_docs.append(
-                        Document(page_content=chunk, metadata={"url": url})
-                    )
-
-            CustomLogger.create_log(
-                "info", f"Created {len(chunked_docs)} chunks from {len(docs)} documents"
-            )
-            return chunked_docs
         except Exception as e:
-            CustomLogger.create_log("error", f"Error chunking documents: {str(e)}")
-            raise Exception(f"Failed to chunk documents: {str(e)}")
+            logger.error(f"Error fetching document text: {str(e)}")
+            return None
+
+    @staticmethod
+    def chunk_documents(docs: List[Any]) -> List[Any]:
+        splitter = RecursiveCharacterTextSplitter(
+            chunk_size=1000, chunk_overlap=200, add_start_index=True
+        )
+        return splitter.split_documents(docs)

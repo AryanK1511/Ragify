@@ -1,5 +1,6 @@
 # app/database/qdrant.py
 
+from typing import Any, List
 
 from config import settings
 from constants import OPENAI_EMBEDDING_DIMENSION, OPENAI_EMBEDDING_MODEL
@@ -15,23 +16,23 @@ from qdrant_client.http.models import (
     VectorParams,
 )
 from utils.database_utils import DatabaseUtils
-from utils.logger import CustomLogger
+from utils.logger import logger
 
 
 class QdrantDatabase:
-    def __init__(self):
+    def __init__(self) -> None:
         try:
             if settings.PYTHON_ENV.lower() == "prod":
-                CustomLogger.create_log("info", "Connecting to Qdrant Cloud (PROD)")
+                logger.info("Connecting to Qdrant Cloud (PROD)")
                 self.client = QdrantClient(
                     url=settings.QDRANT_URL, api_key=settings.QDRANT_API_KEY
                 )
             else:
-                CustomLogger.create_log("info", "Connecting to Qdrant Local (DEV)")
+                logger.info("Connecting to Qdrant Local (DEV)")
                 self.client = QdrantClient(url="http://localhost:6333")
 
             self.client.get_collections()
-            CustomLogger.create_log("info", "Successfully connected to Qdrant")
+            logger.info("Successfully connected to Qdrant")
 
             self.embeddings = OpenAIEmbeddings(
                 model=OPENAI_EMBEDDING_MODEL, api_key=settings.OPENAI_API_KEY
@@ -45,10 +46,10 @@ class QdrantDatabase:
                 embedding=self.embeddings,
             )
         except Exception as e:
-            CustomLogger.create_log("error", f"Failed to connect to Qdrant: {str(e)}")
+            logger.error(f"Failed to connect to Qdrant: {str(e)}")
             raise Exception(f"Failed to connect to Qdrant database: {str(e)}")
 
-    def _ensure_collection_exists(self):
+    def _ensure_collection_exists(self) -> None:
         collections = self.client.get_collections()
         collection_exists = any(
             collection.name == settings.QDRANT_COLLECTION_NAME
@@ -56,8 +57,7 @@ class QdrantDatabase:
         )
 
         if not collection_exists:
-            CustomLogger.create_log(
-                "info",
+            logger.info(
                 f"Creating collection {settings.QDRANT_COLLECTION_NAME} in Qdrant",
             )
             self.client.create_collection(
@@ -67,13 +67,12 @@ class QdrantDatabase:
                 ),
             )
         else:
-            CustomLogger.create_log(
-                "info",
+            logger.info(
                 f"Collection {settings.QDRANT_COLLECTION_NAME} already exists in Qdrant",
             )
 
-    def search(self, query, k=3):
-        CustomLogger.create_log("info", f"Searching for {query}")
+    def search(self, query: str, k: int = 3) -> List[Any]:
+        logger.info(f"Searching for {query}")
         results = self.vector_store.similarity_search_with_score(query, k=k)
         processed_results = []
 
@@ -83,76 +82,107 @@ class QdrantDatabase:
 
         return processed_results
 
-    def add_webpage_docs(self, added_links, removed_links):
+    def remove_embeddings_by_metadata_field(
+        self, field_key: str, values: List[str]
+    ) -> None:
         try:
-            if removed_links:
-                CustomLogger.create_log(
-                    "info", f"Removing embeddings for {len(removed_links)} links"
-                )
-                for url in removed_links:
-                    all_point_ids = []
-                    offset = None
+            logger.info(f"Removing embeddings where `{field_key}` matches {values}")
+            for value in values:
+                all_point_ids = []
+                offset = None
 
-                    while True:
-                        scroll_results = self.client.scroll(
-                            collection_name=settings.QDRANT_COLLECTION_NAME,
-                            scroll_filter=Filter(
-                                must=[
-                                    FieldCondition(
-                                        key="metadata.url",
-                                        match=MatchValue(value=url),
-                                    )
-                                ]
-                            ),
-                            limit=100,
-                            offset=offset,
-                        )
-
-                        points = scroll_results[0]
-                        next_offset = scroll_results[1]
-
-                        for point in points:
-                            if isinstance(point.id, str):
-                                all_point_ids.append(point.id)
-                            elif isinstance(point.id, int):
-                                all_point_ids.append(str(point.id))
-
-                        if not next_offset:
-                            break
-
-                        offset = next_offset
-
-                    if all_point_ids:
-                        batch_size = 100
-                        for i in range(0, len(all_point_ids), batch_size):
-                            batch = all_point_ids[i : i + batch_size]
-                            CustomLogger.create_log(
-                                "info",
-                                f"Deleting batch {i//batch_size + 1} with {len(batch)} points",
-                            )
-                            self.client.delete(
-                                collection_name=settings.QDRANT_COLLECTION_NAME,
-                                points_selector=PointIdsList(points=batch),
-                            )
-
-                CustomLogger.create_log(
-                    "info", "Successfully removed embeddings for removed links"
-                )
-
-            if added_links:
-                CustomLogger.create_log(
-                    "info", f"Processing {len(added_links)} new links"
-                )
-
-                docs = DatabaseUtils.get_text_from_webpages(added_links)
-                chunked_docs = DatabaseUtils.chunk_documents(docs)
-
-                if chunked_docs:
-                    self.vector_store.add_documents(chunked_docs)
-                    CustomLogger.create_log(
-                        "info", f"Added {len(chunked_docs)} chunks to vector store"
+                while True:
+                    scroll_results = self.client.scroll(
+                        collection_name=settings.QDRANT_COLLECTION_NAME,
+                        scroll_filter=Filter(
+                            must=[
+                                FieldCondition(
+                                    key=f"metadata.{field_key}",
+                                    match=MatchValue(value=value),
+                                )
+                            ]
+                        ),
+                        limit=100,
+                        offset=offset,
                     )
 
+                    points = scroll_results[0]
+                    next_offset = scroll_results[1]
+
+                    for point in points:
+                        point_id = str(point.id)
+                        all_point_ids.append(point_id)
+
+                    if not next_offset:
+                        break
+
+                    offset = next_offset
+
+                for i in range(0, len(all_point_ids), 100):
+                    batch = all_point_ids[i : i + 100]
+                    logger.info(f"Deleting batch {i//100 + 1} with {len(batch)} points")
+                    self.client.delete(
+                        collection_name=settings.QDRANT_COLLECTION_NAME,
+                        points_selector=PointIdsList(points=batch),
+                    )
+
+            logger.info(f"Finished removing embeddings for {len(values)} values")
+
         except Exception as e:
-            CustomLogger.create_log("error", f"Error in add_webpage_docs: {str(e)}")
-            raise Exception(f"Failed to update webpage documents: {str(e)}")
+            logger.error(f"Failed to remove embeddings: {str(e)}")
+            raise Exception(f"Failed to remove embeddings: {str(e)}")
+
+    def embed_documents(self, documents: List[Any]) -> None:
+        try:
+            if not documents:
+                logger.warning("No documents provided for embedding.")
+                return
+
+            logger.info(f"Chunking and embedding {len(documents)} documents...")
+            chunked_docs = DatabaseUtils.chunk_documents(documents)
+            logger.info(f"Generated {len(chunked_docs)} chunks from input documents.")
+
+            self.vector_store.add_documents(chunked_docs)
+            logger.info("Successfully added chunks to Qdrant.")
+
+        except Exception as e:
+            logger.error(f"Failed to embed documents: {str(e)}")
+            raise Exception(f"Failed to embed documents: {str(e)}")
+
+    def sync_webpage_embeddings(
+        self, added_links: List[str], removed_links: List[str]
+    ) -> None:
+        try:
+            if removed_links:
+                self.remove_embeddings_by_metadata_field("source_url", removed_links)
+
+            if added_links:
+                logger.info(f"Processing {len(added_links)} new links")
+                for link in added_links:
+                    docs = DatabaseUtils.get_webpage_text(link)
+                    if docs:
+                        self.embed_documents(docs)
+
+        except Exception as e:
+            logger.error(f"Error syncing webpage embeddings: {str(e)}")
+            raise Exception(f"Failed to sync webpage documents: {str(e)}")
+
+    def sync_document_embeddings(
+        self, added_filenames: List[str], removed_filenames: List[str]
+    ) -> None:
+        try:
+            if removed_filenames:
+                self.remove_embeddings_by_metadata_field(
+                    "source_filename", removed_filenames
+                )
+
+            if added_filenames:
+                logger.info(f"Processing {len(added_filenames)} new files")
+                for filename in added_filenames:
+                    docs = DatabaseUtils.get_document_text(filename)
+                    if docs:
+                        self.embed_documents(docs)
+
+        except Exception as e:
+            logger.error(f"Error syncing document embeddings: {str(e)}")
+            raise Exception(f"Failed to sync document embeddings: {str(e)}")
