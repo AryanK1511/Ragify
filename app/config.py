@@ -11,7 +11,6 @@ class Settings(BaseSettings):
     PYTHON_ENV: str = "dev"
     MONGODB_URI: str
     OPENAI_API_KEY: str
-    TAVILY_API_KEY: str
     QDRANT_COLLECTION_NAME: str
     AWS_ACCESS_KEY_ID: str
     AWS_SECRET_ACCESS_KEY: str
