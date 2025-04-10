@@ -2,6 +2,8 @@
 
 import streamlit as st
 from database.mongodb import MongoDB
+from database.qdrant import QdrantDatabase
+from utils.logger import logger
 from utils.validation_utils import ValidationUtils
 
 
@@ -10,7 +12,13 @@ def get_mongodb():
     return MongoDB()
 
 
+@st.cache_resource
+def get_qdrant():
+    return QdrantDatabase()
+
+
 db = get_mongodb()
+qdrant_db = get_qdrant()
 
 if "links" not in st.session_state:
     st.session_state.links = []
@@ -54,8 +62,24 @@ with st.form("add_link_form"):
 
 if st.button("Save Changes", type="primary"):
     try:
-        db.add_links(st.session_state.pending_links)
-        st.success("All changes saved successfully!")
+        db.sync_links(st.session_state.pending_links)
+        new_links = [
+            link
+            for link in st.session_state.pending_links
+            if link not in st.session_state.links
+        ]
+        removed_links = [
+            link
+            for link in st.session_state.links
+            if link not in st.session_state.pending_links
+        ]
+
+        logger.info(f"New links: {new_links}")
+        logger.info(f"Removed links: {removed_links}")
+
+        with st.spinner("Processing links and creating embeddings..."):
+            qdrant_db.sync_webpage_embeddings(new_links, removed_links)
+
         st.session_state.links = db.get_all_links()
         st.session_state.pending_links = st.session_state.links.copy()
         st.session_state.pending_deletions = []
