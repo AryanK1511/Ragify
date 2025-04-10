@@ -1,22 +1,10 @@
 # app/chat.py
 
-import random
-import time
 
 from external.streamlit import st
+from services.ai_service import AIService
 
-
-def response_generator():
-    response = random.choice(
-        [
-            "Hello there! How can I assist you today?",
-            "Hi, human! Is there anything I can help you with?",
-            "Do you need help?",
-        ]
-    )
-    for word in response.split():
-        yield word + " "
-        time.sleep(0.05)
+ai_service = AIService()
 
 
 st.title("Simple chat")
@@ -35,5 +23,6 @@ if prompt := st.chat_input("What is up?"):
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
-        response = st.write_stream(response_generator())
-    st.session_state.messages.append({"role": "assistant", "content": response})
+        response_stream = ai_service.generate_response(prompt)
+        response_text = st.write_stream((chunk.content for chunk in response_stream))
+    st.session_state.messages.append({"role": "assistant", "content": response_text})
