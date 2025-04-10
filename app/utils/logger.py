@@ -22,18 +22,3 @@ coloredlogs.install(
     fmt=log_format,
     field_styles=field_styles,
 )
-
-
-class CustomLogger:
-    @staticmethod
-    def create_log(log_type: str, message: str):
-        if log_type == "debug":
-            logger.debug(message)
-        elif log_type == "warning":
-            logger.warning(message)
-        elif log_type == "error":
-            logger.error(message)
-        elif log_type == "critical":
-            logger.critical(message)
-        else:
-            logger.info(message)
