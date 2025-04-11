@@ -1,0 +1,76 @@
+# Access MongoDB at http://localhost:8081/ | username: admin | password: pass
+# Access Minio at http://localhost:9001/ | username: useradmin | password: userpass
+# Access Qdrant at http://localhost:6333/dashboard
+
+services:
+  mongodb:
+    image: mongo:latest@sha256:ab6556e6d71d9773dd74002db924dc637abb49d079d6ef945982af3078fdf22c
+    container_name: mongodb
+    restart: always
+    ports:
+      - '27017:27017'
+    volumes:
+      - ./data/mongodb:/data/db
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 10s
+      retries: 5
+
+  mongo-express:
+    image: mongo-express:1.0.2-18@sha256:1b23d7976f0210dbec74045c209e52fbb26d29b2e873d6c6fa3d3f0ae32c2a64
+    container_name: mongo-express
+    restart: always
+    ports:
+      - '8081:8081'
+    environment:
+      - ME_CONFIG_MONGODB_SERVER=mongodb
+      - ME_CONFIG_MONGODB_PORT=27017
+      - ME_CONFIG_MONGODB_ENABLE_ADMIN=false
+      - ME_CONFIG_MONGODB_URL=mongodb://mongodb:27017
+    depends_on:
+      mongodb:
+        condition: service_healthy
+
+  qdrant:
+    image: qdrant/qdrant:v1.13.4@sha256:318c11b72aaab96b36e9662ad244de3cabd0653a1b942d4e8191f18296c81af0
+    container_name: qdrant
+    restart: unless-stopped
+    ports:
+      - '6333:6333' # REST API (dashboard: http://localhost:6333/dashboard)
+      - '6334:6334' # gRPC API
+    volumes:
+      - ./data/qdrant:/qdrant/storage
+
+  minio:
+    image: minio/minio:latest@sha256:8834ae47a2de3509b83e0e70da9369c24bbbc22de42f2a2eddc530eee88acd1b
+    container_name: minio
+    restart: always
+    ports:
+      - '9000:9000' # S3 API endpoint
+      - '9001:9001' # Minio Console
+    environment:
+      - MINIO_ROOT_USER=useradmin
+      - MINIO_ROOT_PASSWORD=userpass
+    volumes:
+      - ./data/minio:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:9000/minio/health/live']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # https://stackoverflow.com/questions/66412289/minio-add-a-public-bucket-with-docker-compose
+  minio-setup:
+    image: minio/mc:latest@sha256:7e3efb09c22c0882fbf341b9d99f61f94ae6c4c20a06f2f1a2b20ea8993d8952
+    container_name: minio-setup
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+        echo 'Minio is ready. Setting up alias and bucket.';
+        mc alias set myminio http://minio:9000 useradmin userpass &&
+        mc mb myminio/aryank1511-ragify || echo 'Bucket may already exist';
+      "

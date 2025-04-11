@@ -2,7 +2,6 @@ from typing import Dict, List
 
 from langchain.prompts import ChatPromptTemplate
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
-from utils.logger import logger
 
 
 class AIUtils:
@@ -43,5 +42,4 @@ class AIUtils:
                 message_history_messages.append(HumanMessage(content=chat["content"]))
             elif chat["role"] == "ai":
                 message_history_messages.append(AIMessage(content=chat["content"]))
-        logger.info(f"Message history messages: {message_history_messages}")
         return message_history_messages
