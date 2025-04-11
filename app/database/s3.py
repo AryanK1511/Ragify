@@ -9,13 +9,26 @@ from utils.logger import logger
 class S3Storage:
     def __init__(self):
         try:
-            self.s3_client = boto3.client(
-                "s3",
-                aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
-                aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
-                region_name=settings.AWS_REGION,
-            )
-            self.bucket_name = settings.AWS_BUCKET_NAME
+            if settings.PYTHON_ENV.lower() == "prod":
+                logger.info("Connecting to AWS S3 (PROD)")
+                self.s3_client = boto3.client(
+                    "s3",
+                    aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+                    aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+                    region_name=settings.AWS_REGION,
+                )
+                self.bucket_name = settings.AWS_BUCKET_NAME
+            else:
+                logger.info("Connecting to MinIO Local (DEV)")
+                self.s3_client = boto3.client(
+                    "s3",
+                    endpoint_url="http://localhost:9000",
+                    aws_access_key_id="useradmin",
+                    aws_secret_access_key="userpass",
+                    region_name="us-east-2",
+                )
+                self.bucket_name = settings.AWS_BUCKET_NAME
+
             logger.info("S3Storage initialized successfully")
         except Exception as e:
             logger.error(f"Error initializing S3Storage: {e}")

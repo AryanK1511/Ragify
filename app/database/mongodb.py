@@ -1,7 +1,5 @@
 # app/database/mongodb.py
 
-# app/database/mongodb.py
-
 from typing import List
 
 from config import settings
@@ -12,11 +10,21 @@ from utils.logger import logger
 
 class MongoDB:
     def __init__(self):
-        self.client = MongoClient(settings.MONGODB_URI)
-        self.db = self.client.ragify_database
-        self.links_collection = self.db.links
-        self.qdrant_db = QdrantDatabase()
-        self.qdrant_db = QdrantDatabase()
+        try:
+            if settings.PYTHON_ENV.lower() == "prod":
+                logger.info("Connecting to MongoDB Cloud (PROD)")
+                self.client = MongoClient(settings.MONGODB_URI)
+            else:
+                logger.info("Connecting to MongoDB Local (DEV)")
+                self.client = MongoClient("mongodb://localhost:27017")
+
+            self.db = self.client.ragify_database
+            self.links_collection = self.db.links
+            self.qdrant_db = QdrantDatabase()
+            logger.info("Successfully connected to MongoDB")
+        except Exception as e:
+            logger.error(f"Failed to connect to MongoDB: {str(e)}")
+            raise Exception(f"Failed to connect to MongoDB: {str(e)}")
 
     def get_all_links(self) -> List[str]:
         try:
